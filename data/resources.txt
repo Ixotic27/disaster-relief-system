@@ -1,0 +1,4 @@
+resource_id,name,quantity
+RES1,Water,1000
+RES2,MedKit,200
+RES3,Blanket,500

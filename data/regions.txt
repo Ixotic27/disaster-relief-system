@@ -1,0 +1,4 @@
+region_id,name,severity
+DEPOT,CentralDepot,0
+R1,Downtown,9
+R2,Suburb,6

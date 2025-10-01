@@ -1,0 +1,5 @@
+from,to,cost
+DEPOT,R1,10
+DEPOT,R2,20
+R1,R2,5
+R2,R1,5
