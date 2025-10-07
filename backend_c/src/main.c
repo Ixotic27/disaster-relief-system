@@ -74,6 +74,5 @@ int main(int argc, char **argv)
     free(resources);
     free(regions);
     free(requests);
-    
     return 0;
 }
