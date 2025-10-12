@@ -1,0 +1,25 @@
+#region_index,region_id,resource_id,resource_name,quantity
+1,RG2,R1,Rice,1333334
+1,RG2,R2,Water Bottles,1500000
+1,RG2,R3,Blankets,8333334
+1,RG2,R4,Medicines,50000000
+2,RG3,R1,Rice,1333334
+2,RG3,R2,Water Bottles,1500000
+2,RG3,R3,Blankets,8333334
+2,RG3,R4,Medicines,50000000
+3,RG4,R1,Rice,1333333
+3,RG4,R2,Water Bottles,1500000
+3,RG4,R3,Blankets,8333333
+3,RG4,R4,Medicines,50000000
+4,RG5,R1,Rice,1333333
+4,RG5,R2,Water Bottles,1500000
+4,RG5,R3,Blankets,8333333
+4,RG5,R4,Medicines,50000000
+5,RG6,R1,Rice,1333333
+5,RG6,R2,Water Bottles,1500000
+5,RG6,R3,Blankets,8333333
+5,RG6,R4,Medicines,50000000
+6,RG7,R1,Rice,1333333
+6,RG7,R2,Water Bottles,1500000
+6,RG7,R3,Blankets,8333333
+6,RG7,R4,Medicines,50000000

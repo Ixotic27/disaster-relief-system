@@ -1,4 +1,8 @@
-region_id,name,severity
-DEPOT,CentralDepot,0
-R1,Downtown,9
-R2,Suburb,6
+#ID,Name,Severity(optional),Population
+RG1,Dehradun,0,578000
+RG2,Haridwar,0,192000
+RG3,Tehri,0,120000
+RG4,Pauri,0,110000
+RG5,Chamoli,0,95000
+RG6,Nainital,0,170000
+RG7,Almora,0,125000

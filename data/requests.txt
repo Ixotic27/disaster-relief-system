@@ -1,4 +1,4 @@
-request_id,region_id,resource_id,qty
-REQ1,R1,RES1,150
-REQ2,R2,RES2,50
-REQ3,R1,RES3,600
+#RequestID,RegionID,ResourceID,QtyNeeded
+REQ1,RG1,R1,500
+REQ2,RG3,R2,200
+REQ3,RG5,R4,100

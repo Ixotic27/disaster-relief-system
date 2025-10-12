@@ -1,163 +1,195 @@
 #include "../include/fileio.h"
 #include "../include/types.h"
 #include "../include/graph.h"
+#include "graph.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static char *strip(char *s)
-{
-    while (*s == ' ' || *s == '\t')
-        s++;
-    char *e = s + strlen(s) - 1;
-    while (e >= s && (*e == '\n' || *e == '\r' || *e == ' ' || *e == '\t'))
-        *e-- = 0;
+// ============================================================
+// Utility Functions
+// ============================================================
+
+// Removes spaces, tabs, and newlines from both ends
+static char *trim(char *s) {
+    while (*s == ' ' || *s == '\t') s++;
+    char *end = s + strlen(s) - 1;
+    while (end >= s && (*end == '\n' || *end == '\r' || *end == ' ' || *end == '\t'))
+        *end-- = '\0';
     return s;
 }
 
-int load_resources(const char *path, Resource **arr, int *n)
-{
+// Checks if a line is a comment or blank
+static int skip_line(const char *s) {
+    return (s[0] == '#' || s[0] == '\n' || s[0] == '\r' || s[0] == '\0');
+}
+
+// ============================================================
+// Load Resources
+// Format → ID,Name,Category,Quantity
+// ============================================================
+int load_resources(const char *path, Resource **arr, int *n) {
     FILE *f = fopen(path, "r");
-    if (!f)
+    if (!f) {
+        printf("Could not open %s\n", path);
         return 1;
+    }
+
     char buf[256];
     int cap = 8;
     *n = 0;
     *arr = malloc(sizeof(Resource) * cap);
-    fgets(buf, sizeof(buf), f);
-    while (fgets(buf, sizeof(buf), f))
-    {
-        char *p = strdup(buf);
-        if (!p) continue;
-        char *id = strtok(p, ",");
-        char *name = strtok(NULL, ",");
-        char *qty = strtok(NULL, ",");
-        if (!id || !name || !qty)
-        {
-            free(p);
-            continue;
+
+    printf("\nLoading resources from %s...\n", path);
+
+    while (fgets(buf, sizeof(buf), f)) {
+        if (skip_line(buf)) continue;
+
+        char id[IDLEN], name[64], category[32];
+        int qty;
+
+        if (sscanf(buf, "%[^,],%[^,],%[^,],%d", id, name, category, &qty) == 4) {
+            if (*n >= cap) {
+                cap *= 2;
+                *arr = realloc(*arr, sizeof(Resource) * cap);
+            }
+
+            strncpy((*arr)[*n].id, trim(id), IDLEN - 1);
+            (*arr)[*n].id[IDLEN - 1] = '\0';
+            strncpy((*arr)[*n].name, trim(name), 63);
+            (*arr)[*n].name[63] = '\0';
+            strncpy((*arr)[*n].category, trim(category), 31);
+            (*arr)[*n].category[31] = '\0';
+            (*arr)[*n].quantity = qty;
+
+            (*n)++;
         }
-        if (*n >= cap)
-        {
-            cap *= 2;
-            *arr = realloc(*arr, sizeof(Resource) * cap);
-        }
-        strncpy((*arr)[*n].id, strip(id), IDLEN - 1);
-        (*arr)[*n].id[IDLEN - 1] = 0;
-        strncpy((*arr)[*n].name, strip(name), 63);
-        (*arr)[*n].name[63] = 0;
-        (*arr)[*n].quantity = atoi(strip(qty));
-        (*n)++;
-        free(p);
     }
+
     fclose(f);
+    printf("%d resources loaded successfully.\n", *n);
     return 0;
 }
 
-int load_regions(const char *path, Region **arr, int *n)
-{
+// ============================================================
+// Load Regions (Districts)
+// Format → ID,Name,Severity,Population
+// ============================================================
+int load_regions(const char *path, Region **arr, int *n) {
     FILE *f = fopen(path, "r");
-    if (!f)
+    if (!f) {
+        printf("Could not open %s\n", path);
         return 1;
+    }
+
     char buf[256];
     int cap = 8;
     *n = 0;
     *arr = malloc(sizeof(Region) * cap);
-    fgets(buf, sizeof(buf), f);
-    while (fgets(buf, sizeof(buf), f))
-    {
-        char *p = strdup(buf);
-        if (!p) continue;
-        char *id = strtok(p, ",");
-        char *name = strtok(NULL, ",");
-        char *sev = strtok(NULL, ",");
-        if (!id || !name || !sev)
-        {
-            free(p);
-            continue;
+
+    printf("\nLoading districts (regions) from %s...\n", path);
+
+    while (fgets(buf, sizeof(buf), f)) {
+        if (skip_line(buf)) continue;
+
+        char id[IDLEN], name[64];
+        int severity = 0, population = 0;
+
+        // Parse: ID,Name,Severity,Population
+        if (sscanf(buf, "%[^,],%[^,],%d,%d", id, name, &severity, &population) == 4) {
+            if (*n >= cap) {
+                cap *= 2;
+                *arr = realloc(*arr, sizeof(Region) * cap);
+            }
+
+            strncpy((*arr)[*n].id, trim(id), IDLEN - 1);
+            (*arr)[*n].id[IDLEN - 1] = '\0';
+            strncpy((*arr)[*n].name, trim(name), 63);
+            (*arr)[*n].name[63] = '\0';
+            (*arr)[*n].population = population;
+            (*arr)[*n].severity = severity;  // Load severity from file (will be 0 for safe regions)
+
+            (*n)++;
         }
-        if (*n >= cap)
-        {
-            cap *= 2;
-            *arr = realloc(*arr, sizeof(Region) * cap);
-        }
-        strncpy((*arr)[*n].id, strip(id), IDLEN - 1);
-        (*arr)[*n].id[IDLEN - 1] = 0;
-        strncpy((*arr)[*n].name, strip(name), 63);
-        (*arr)[*n].name[63] = 0;
-        (*arr)[*n].severity = atoi(strip(sev));
-        (*n)++;
-        free(p);
     }
+
     fclose(f);
+    printf("Loaded %d districts successfully.\n", *n);
     return 0;
 }
 
-int load_requests(const char *path, Request **arr, int *n)
-{
+// ============================================================
+// Load Requests
+// Format → RequestID,RegionID,ResourceID,Quantity
+// ============================================================
+int load_requests(const char *path, Request **arr, int *n) {
     FILE *f = fopen(path, "r");
-    if (!f)
+    if (!f) {
+        printf("Could not open %s\n", path);
         return 1;
+    }
+
     char buf[256];
     int cap = 8;
     *n = 0;
     *arr = malloc(sizeof(Request) * cap);
-    fgets(buf, sizeof(buf), f);
-    while (fgets(buf, sizeof(buf), f))
-    {
-        char *p = strdup(buf);
-        if (!p) continue;
-        char *rid = strtok(p, ",");
-        char *ridreg = strtok(NULL, ",");
-        char *resid = strtok(NULL, ",");
-        char *qty = strtok(NULL, ",");
-        if (!rid || !ridreg || !resid || !qty)
-        {
-            free(p);
-            continue;
+
+    printf("\nLoading requests from %s...\n", path);
+
+    while (fgets(buf, sizeof(buf), f)) {
+        if (skip_line(buf)) continue;
+
+        char rid[IDLEN], region[IDLEN], res[IDLEN];
+        int qty;
+
+        if (sscanf(buf, "%[^,],%[^,],%[^,],%d", rid, region, res, &qty) == 4) {
+            if (*n >= cap) {
+                cap *= 2;
+                *arr = realloc(*arr, sizeof(Request) * cap);
+            }
+
+            strncpy((*arr)[*n].id, trim(rid), IDLEN - 1);
+            strncpy((*arr)[*n].region_id, trim(region), IDLEN - 1);
+            strncpy((*arr)[*n].resource_id, trim(res), IDLEN - 1);
+            (*arr)[*n].qty_needed = qty;
+
+            (*n)++;
         }
-        if (*n >= cap)
-        {
-            cap *= 2;
-            *arr = realloc(*arr, sizeof(Request) * cap);
-        }
-        strncpy((*arr)[*n].id, strip(rid), IDLEN - 1);
-        (*arr)[*n].id[IDLEN - 1] = 0;
-        strncpy((*arr)[*n].region_id, strip(ridreg), IDLEN - 1);
-        (*arr)[*n].region_id[IDLEN - 1] = 0;
-        strncpy((*arr)[*n].resource_id, strip(resid), IDLEN - 1);
-        (*arr)[*n].resource_id[IDLEN - 1] = 0;
-        (*arr)[*n].qty_needed = atoi(strip(qty));
-        (*n)++;
-        free(p);
     }
+
     fclose(f);
+    printf("%d requests loaded successfully.\n", *n);
     return 0;
 }
 
-int load_edges(const char *path, void *graph)
-{
-    Graph *g = (Graph *)graph;
+// ============================================================
+// Load Edges (Graph Connections)
+// Format → Region1,Region2,Distance
+// ============================================================
+int load_edges(const char *path, Graph *g){
     FILE *f = fopen(path, "r");
-    if (!f)
+    if (!f) {
+        printf("Could not open %s\n", path);
         return 1;
-    char buf[256];
-    fgets(buf, sizeof(buf), f);
-    while (fgets(buf, sizeof(buf), f))
-    {
-        char *p = strdup(buf);
-        if (!p) continue;
-        char *from = strtok(p, ",");
-        char *to = strtok(NULL, ",");
-        char *cost = strtok(NULL, ",");
-        if (!from || !to || !cost)
-        {
-            free(p);
-            continue;
-        }
-        graph_add_edge(g, strip(from), strip(to), atoi(strip(cost)));
-        free(p);
     }
+
+    char buf[256];
+    printf("\nLoading connections between districts from %s...\n", path);
+
+    while (fgets(buf, sizeof(buf), f)) {
+        if (skip_line(buf)) continue;
+
+        char from[64], to[64];
+        int dist;
+
+        if (sscanf(buf, "%[^,],%[^,],%d", from, to, &dist) == 3) {
+            trim(from); trim(to);
+            graph_add_edge(g, from, to, dist);
+            graph_add_edge(g, to, from, dist); // bidirectional
+        }
+    }
+
     fclose(f);
+    printf("District routes loaded successfully.\n");
     return 0;
 }
