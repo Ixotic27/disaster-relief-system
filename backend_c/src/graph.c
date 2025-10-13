@@ -60,7 +60,7 @@ void graph_add_edge(Graph *g, const char *from, const char *to, int cost)
 int graph_shortest_path(Graph *g, const char *src, const char *dst, char ***path_out, int *path_len, int *dist_out)
 {
     int n = g->n;
-    int si = find_region_index_by_id(g, src);      // src/dst are IDs (RG1, RG2, etc)
+    int si = find_region_index_by_id(g, src);// src/dst are IDs (RG1, RG2, etc)
     int di = find_region_index_by_id(g, dst);
     if (si < 0 || di < 0)
         return 1;

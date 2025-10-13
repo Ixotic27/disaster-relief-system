@@ -1,2 +1,8 @@
 #region_index,region_id,region_name,severity,population
-0,RG1,Dehradun,8,578000
+0,RG1,Dehradun,2,578000
+1,RG2,Haridwar,3,192000
+2,RG3,Tehri,3,120000
+3,RG4,Pauri,4,110000
+4,RG5,Chamoli,5,95000
+5,RG6,Nainital,6,170000
+6,RG7,Almora,7,125000

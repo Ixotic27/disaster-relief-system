@@ -1,5 +1,5 @@
 #ID,Name,Category,Quantity
-R1,Rice,Food,8000000
-R2,Water Bottles,Essential,9000000
-R3,Blankets,Clothing,50000000
-R4,Medicines,Medical,300000000
+R1,Rice,Food,8000
+R2,Water Bottles,Essential,9000
+R3,Blankets,Clothing,500
+R4,Medicines,Medical,3000
