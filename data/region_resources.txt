@@ -1,1 +1,5 @@
 #region_index,region_id,resource_id,resource_name,quantity
+12,RG13,R1,Rice,12345678
+12,RG13,R2,Water Bottles,12345678
+12,RG13,R3,Blankets,12345678
+12,RG13,R4,Medicines,12345678
