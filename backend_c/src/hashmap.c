@@ -8,7 +8,7 @@ static unsigned long hash_str(const char *s)
     unsigned long h = 5381;
     int c;
     while ((c = *s++))
-        h = ((h << 5) + h) + c; // h * 33 + c
+        h = ((h << 5) + h) + c; //h = h*32+h = h * 33 + c
     return h;
 }
 
