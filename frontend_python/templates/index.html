@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disaster Relief Resource Allocation System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-in { animation: slideIn 0.5s ease-out; }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin { animation: spin 1s linear infinite; }
+        
+        .severity-slider {
+            background: linear-gradient(to right, #10b981 0%, #fbbf24 50%, #ef4444 100%);
+        }
+        
+        .region-card {
+            transition: all 0.3s ease;
+        }
+        
+        .region-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .status-badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            text-transform: uppercase;
+        }
+        
+        #map { height: 300px; border-radius: 0.5rem; }
+        
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+            z-index: 9999;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navbar -->
+    <nav class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <h1 class="text-2xl font-bold flex items-center">
+                    <i class="fas fa-globe-asia mr-3"></i>
+                    🌍 Disaster Relief Resource Allocation
+                </h1>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm bg-blue-700 px-3 py-1 rounded-full">
+                        <i class="fas fa-map-marked-alt mr-1"></i> Uttarakhand
+                    </span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Panel - Input Section -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-sliders-h mr-2 text-blue-600"></i>
+                        Region Configuration
+                    </h2>
+                    
+                    <!-- Map -->
+                    <div class="mb-6">
+                        <div id="map" class="border-2 border-gray-200"></div>
+                    </div>
+
+                    <!-- Region Selection -->
+                    <div class="space-y-3" id="region-list">
+                        <!-- Regions will be dynamically added here -->
+                    </div>
+
+                    <!-- Control Buttons -->
+                    <div class="mt-6 space-y-3">
+                        <button id="select-all-btn" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg transition">
+                            <i class="fas fa-check-double mr-2"></i>Select All
+                        </button>
+                        <button id="clear-all-btn" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg transition">
+                            <i class="fas fa-times-circle mr-2"></i>Clear All
+                        </button>
+                        <button id="run-allocation-btn" class="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-4 rounded-lg transition shadow-lg">
+                            <i class="fas fa-play-circle mr-2"></i>Run Allocation
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Output Section -->
+            <div class="lg:col-span-2">
+                <!-- Summary Cards -->
+                <div id="summary-section" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 hidden">
+                    <div class="bg-white rounded-lg shadow-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600">Total Requests</p>
+                                <p class="text-2xl font-bold text-blue-600" id="total-requests">0</p>
+                            </div>
+                            <i class="fas fa-file-alt text-3xl text-blue-300"></i>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600">Allocated</p>
+                                <p class="text-2xl font-bold text-green-600" id="total-allocated">0</p>
+                            </div>
+                            <i class="fas fa-check-circle text-3xl text-green-300"></i>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600">Total Cost</p>
+                                <p class="text-2xl font-bold text-purple-600" id="total-cost">₹0</p>
+                            </div>
+                            <i class="fas fa-rupee-sign text-3xl text-purple-300"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Table -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-table mr-2 text-blue-600"></i>
+                        Allocation Report
+                    </h2>
+                    
+                    <!-- Loading State -->
+                    <div id="loading-state" class="hidden text-center py-12">
+                        <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                        <p class="mt-4 text-gray-600">Processing allocation...</p>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div id="empty-state" class="text-center py-12">
+                        <i class="fas fa-clipboard-list text-6xl text-gray-300 mb-4"></i>
+                        <p class="text-gray-600 text-lg">Select regions and run allocation to view results</p>
+                    </div>
+
+                    <!-- Results Container -->
+                    <div id="results-container" class="hidden overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Req ID</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Region</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Resource</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Allocated</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="results-tbody" class="bg-white divide-y divide-gray-200">
+                                <!-- Results will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

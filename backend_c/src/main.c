@@ -9,32 +9,47 @@
 #include <stdlib.h>
 #include <string.h>
 
+// main function now accepts command-line arguments for the input file
 int main(int argc, char **argv)
 {
-    const char *dataPath = "../data";
-    char filePath[256];
+    // --- MODIFICATION 1: Check for input file argument ---
+    if (argc < 2) {
+        fprintf(stderr, "Error: Missing input file path.\n");
+        fprintf(stderr, "Usage: %s <path_to_input_file>\n", argv[0]);
+        return 1;
+    }
+    const char *inputFilePath = argv[1];
 
+    // --- MODIFICATION 2: Open the input file provided by Python ---
+    FILE *inputFile = fopen(inputFilePath, "r");
+    if (!inputFile) {
+        // Use perror for more descriptive file errors
+        perror("CRITICAL ERROR: Failed to open input file");
+        return 1;
+    }
+
+    // This part remains the same
+    const char *dataPath = "../../data";
+    char filePath[256];
     Resource *resources = NULL;
     Region *regions = NULL;
     int nres = 0, nreg = 0;
 
     // === Load Resources ===
     snprintf(filePath, sizeof(filePath), "%s/resources.txt", dataPath);
-    if (load_resources(filePath, &resources, &nres) != 0)
-    {
-        fprintf(stderr, "Error: Failed to load resources\n");
+    if (load_resources(filePath, &resources, &nres) != 0) {
+        fprintf(stderr, "Error: Failed to load resources from %s\n", filePath);
+        fclose(inputFile); // Close the file before exiting
         return 1;
     }
-    printf("Loaded %d resources\n", nres);
 
     // === Load Regions ===
     snprintf(filePath, sizeof(filePath), "%s/regions.txt", dataPath);
-    if (load_regions(filePath, &regions, &nreg) != 0)
-    {
-        fprintf(stderr, "Error: Failed to load regions\n");
+    if (load_regions(filePath, &regions, &nreg) != 0) {
+        fprintf(stderr, "Error: Failed to load regions from %s\n", filePath);
+        fclose(inputFile);
         return 1;
     }
-    printf("Loaded %d regions\n", nreg);
 
     // === Setup HashMap for Resources ===
     HashMap *hm = hm_create(2 * nres + 1);
@@ -48,204 +63,94 @@ int main(int argc, char **argv)
 
     snprintf(filePath, sizeof(filePath), "%s/edges.txt", dataPath);
     if (load_edges(filePath, g) != 0)
-        fprintf(stderr, "Warning: Failed to load edges\n");
-
-    // === Print all regions ===
-    printf("\n=== Disaster Resource Allocation System ===\n\n");
-    printf("List of Regions:\n");
-    for (int i = 0; i < nreg; i++)
-        printf(" [%d] %s (id: %s)\n", i + 1, regions[i].name, regions[i].id);
+        fprintf(stderr, "Warning: Failed to load edges from %s\n", filePath);
 
     // Default severity = 0 for all regions
     for (int i = 0; i < nreg; i++)
         regions[i].severity = 0;
 
-    // Ask number of affected regions FIRST
+    // --- MODIFICATION 3: Read from the input file using fscanf ---
     int disasterCount = 0;
-    printf("\nEnter number of disaster-affected regions: ");
-    if (scanf("%d", &disasterCount) != 1 || disasterCount < 0 || disasterCount > nreg)
-    {
-        printf("Invalid number. Exiting.\n");
-        return 1;
-    }
-    while (getchar() != '\n'); // flush buffer
-
-    int *is_disaster = calloc(nreg, sizeof(int));
-    if (!is_disaster)
-    {
+    // Replace scanf("%d", &disasterCount)
+    if (fscanf(inputFile, "%d", &disasterCount) != 1 || disasterCount < 0 || disasterCount > nreg) {
+        fprintf(stderr, "Error: Invalid number of disaster regions in input file.\n");
+        fclose(inputFile);
         return 1;
     }
 
-    // === Select affected regions and ONLY ask severity for affected ones ===
-    for (int i = 0; i < disasterCount; i++)
-    {
-        int count = -1;
-        printf("\nSelect disaster region #%d (enter region number): ", i + 1);
-        if (scanf("%d", &count) != 1 || count < 1 || count > nreg)
-        {
-            printf("Invalid selection. Try again.\n");
-            while (getchar() != '\n');
-            i--;
-            continue;
-        }
-        while (getchar() != '\n'); // flush buffer
-
-        int idx = count - 1;
-        if (is_disaster[idx])
-        {
-            printf("Already selected. Pick another.\n");
-            i--;
-            continue;
+    // === Read affected regions and their severities from the file ===
+    for (int i = 0; i < disasterCount; i++) {
+        int region_id = -1, severity = -1;
+        // Replace scanf("%d %d", &region_id, &severity)
+        if (fscanf(inputFile, "%d %d", &region_id, &severity) != 2) {
+            fprintf(stderr, "Error: Malformed region/severity line in input file.\n");
+            fclose(inputFile);
+            return 1;
         }
 
-        is_disaster[idx] = 1;
-
-        // ONLY ask severity for affected regions
-        int sev = 0;
-        printf("Enter severity for %s (1-10): ", regions[idx].name);
-        if (scanf("%d", &sev) != 1 || sev < 1 || sev > 10)
-        {
-            printf("Invalid input. Using default severity = 1.\n");
-            sev = 1;
-            while (getchar() != '\n');
-        }
-        while (getchar() != '\n'); // flush buffer
-        regions[idx].severity = sev;
-    }
-
-    // === Print safe regions ===
-    printf("\nSafe regions:\n");
-    for (int i = 0; i < nreg; i++)
-        if (!is_disaster[i])
-            printf("  - %s (id: %s)\n", regions[i].name, regions[i].id);
-
-    // === Resource allocation for safe regions ===
-    printf("\nDo you want to manually enter resources for SAFE regions? (y/n): ");
-    char yn;
-    scanf("%c", &yn);
-    while (getchar() != '\n'); // flush buffer
-
-    int **stock = malloc(sizeof(int *) * nres);
-    for (int r = 0; r < nres; r++)
-        stock[r] = calloc(nreg, sizeof(int));
-
-    if (yn == 'y' || yn == 'Y')
-    {
-        for (int i = 0; i < nreg; i++)
-        {
-            if (is_disaster[i]) continue;
-            printf("\n-- Safe region: %s --\n", regions[i].name);
-            for (int r = 0; r < nres; r++)
-            {
-                printf("  Available %s (%s): ", resources[r].name, resources[r].id);
-                int q = 0;
-                if (scanf("%d", &q) != 1 || q < 0)
-                {
-                    printf("Invalid, assuming 0.\n");
-                    q = 0;
-                    while (getchar() != '\n');
-                }
-                stock[r][i] = q;
+        // Find the region index from its ID. Note: region IDs in your app start from 1.
+        int region_idx = -1;
+        for (int j = 0; j < nreg; j++) {
+            // Assuming region IDs are strings, so we convert the read int to string to compare
+            char id_str[10];
+            snprintf(id_str, 10, "%d", region_id);
+            if (strcmp(regions[j].id, id_str) == 0) {
+                region_idx = j;
+                break;
             }
         }
-    }
-    else
-    {
-        int safeCount = 0;
-        for (int i = 0; i < nreg; i++)
-            if (!is_disaster[i]) safeCount++;
-        if (safeCount == 0) safeCount = 1;
-
-        for (int r = 0; r < nres; r++)
-        {
-            int per = resources[r].quantity / safeCount;
-            int rem = resources[r].quantity % safeCount;
-            for (int i = 0; i < nreg; i++)
-            {
-                if (is_disaster[i]) { stock[r][i] = 0; continue; }
-                stock[r][i] = per + (rem > 0 ? 1 : 0);
-                if (rem > 0) rem--;
-            }
+        
+        if (region_idx == -1) {
+            fprintf(stderr, "Error: Region with ID %d not found.\n", region_id);
+            continue; // Skip this invalid region
         }
-        printf("\nDistributed global resources to safe regions.\n");
+
+        if (severity < 1 || severity > 10) {
+            fprintf(stderr, "Warning: Invalid severity %d for region %d. Defaulting to 1.\n", severity, region_id);
+            severity = 1;
+        }
+        regions[region_idx].severity = severity;
     }
 
-    // === Save disaster_config.txt ===
-    snprintf(filePath, sizeof(filePath), "%s/disaster_config.txt", dataPath);
-    FILE *df = fopen(filePath, "w");
-    if (df)
-    {
-        fprintf(df, "#region_index,region_id,region_name,severity,population\n");
-        for (int i = 0; i < nreg; i++)
-            if (is_disaster[i])
-                fprintf(df, "%d,%s,%s,%d,%d\n", i, regions[i].id, regions[i].name, regions[i].severity, regions[i].population);
-        fclose(df);
-        printf("Saved disaster_config.txt\n");
-    }
-
-    // === Save region_resources.txt ===
-    snprintf(filePath, sizeof(filePath), "%s/region_resources.txt", dataPath);
-    FILE *rf = fopen(filePath, "w");
-    if (rf)
-    {
-        fprintf(rf, "#region_index,region_id,resource_id,resource_name,quantity\n");
-        for (int i = 0; i < nreg; i++)
-            for (int r = 0; r < nres; r++)
-                if (stock[r][i] > 0)
-                    fprintf(rf, "%d,%s,%s,%s,%d\n", i, regions[i].id, resources[r].id, resources[r].name, stock[r][i]);
-        fclose(rf);
-        printf("Saved region_resources.txt\n");
-    }
+    // --- MODIFICATION 4: Close the input file ---
+    fclose(inputFile);
 
     // === Prepare Heap of Disaster Requests ===
-    // Create a request for EACH resource in each affected region
     Heap *h = heap_create(disasterCount * nres + 5);
     int req_counter = 0;
-    
-    for (int i = 0; i < nreg; i++)
-    {
-        if (!is_disaster[i]) continue;
+    for (int i = 0; i < nreg; i++) {
+        if (regions[i].severity > 0) { // Check if it's a disaster region
+            for (int r = 0; r < nres; r++) {
+                Request *req = malloc(sizeof(Request));
+                snprintf(req->id, IDLEN, "RQ_%d", req_counter++);
+                strncpy(req->region_id, regions[i].id, IDLEN - 1);
+                req->region_id[IDLEN - 1] = '\0';
+                strncpy(req->resource_id, resources[r].id, IDLEN - 1);
+                req->resource_id[IDLEN - 1] = '\0';
+                
+                // Simplified logic: request quantity based on severity
+                req->qty_needed = regions[i].severity * 100;
 
-        // For each resource, create a request
-        for (int r = 0; r < nres; r++)
-        {
-            Request *req = malloc(sizeof(Request));
-            snprintf(req->id, IDLEN, "RQ_%d", req_counter++);
-            strncpy(req->region_id, regions[i].id, IDLEN - 1);
-            req->region_id[IDLEN - 1] = '\0';
-            strncpy(req->resource_id, resources[r].id, IDLEN - 1);  // ASSIGN RESOURCE ID
-            req->resource_id[IDLEN - 1] = '\0';
-            
-            printf("DEBUG: Request %s - Region: %s, Resource: %s\n", req->id, req->region_id, req->resource_id);
-            
-            req->qty_needed = regions[i].population;
-
-            int priority = regions[i].severity * 1000 + regions[i].population;
-            heap_insert(h, req, priority);
+                int priority = regions[i].severity * 1000 + regions[i].population;
+                heap_insert(h, req, priority);
+            }
         }
     }
-
-    // === Generate Report ===
-    snprintf(filePath, sizeof(filePath), "%s/report.txt", dataPath);
-
-    // === Allocation Process ===
+    
+    // === Allocation Process and Report Generation ===
+    // This part assumes run_allocator does the main work and generates the report
     run_allocator(h, g, hm, regions, nreg, resources, nres);
 
-    // === Cleanup Requests in Heap ===
+
+    // === Cleanup ===
     Request *r;
     while ((r = heap_pop(h)) != NULL)
         free(r);
     heap_free(h);
-
-    // === Cleanup Other Resources ===
     hm_free(hm);
     graph_free(g);
-    for (int r = 0; r < nres; r++) free(stock[r]);
-    free(stock);
-    free(is_disaster);
     free(resources);
     free(regions);
 
-    printf("\nSetup complete. Allocation finished (see report.txt).\n");
-    return 0;
+    return 0; // SUCCESS!
 }
