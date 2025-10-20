@@ -43,8 +43,7 @@ void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Re
     printf("\nStarting Resource Allocation Process...\n");
 
     // Initialize report file at the beginning (write headers only)
-    init_report("../data/report.txt");
-
+    init_report("report.txt"); // <-- CORRECTED LINE
     // Count affected regions first
     int affected_count = 0;
     for (int i = 0; i < nreg; i++) {
