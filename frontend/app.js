@@ -1,12 +1,8 @@
 // Global variables
-let map;
-let markers = [];
-let polylines = [];
-let markerIdCounter = 0;
-let disasterIcon, resourceIcon;
+let map, markers = [], polylines = [], markerIdCounter = 0, disasterIcon, resourceIcon;
 
-// Initialize when page loads
-window.addEventListener('load', function() {
+// Initialize on page load
+window.addEventListener('load', () => {
     initMap();
     attachEventListeners();
 });
@@ -46,10 +42,13 @@ function initMap() {
 }
 
 function attachEventListeners() {
-    document.getElementById('btn-mark-disaster').addEventListener('click', () => addMarkerFromSearch('disaster'));
-    document.getElementById('btn-mark-resource').addEventListener('click', () => addMarkerFromSearch('resource'));
-    document.getElementById('btn-sample-data').addEventListener('click', loadSampleData);
-    document.getElementById('btn-generate-run').addEventListener('click', generateAndRun);
+    const listeners = {
+        'btn-mark-disaster': () => addMarkerFromSearch('disaster'),
+        'btn-mark-resource': () => addMarkerFromSearch('resource'),
+        'btn-sample-data': loadSampleData,
+        'btn-generate-run': generateAndRun
+    };
+    Object.entries(listeners).forEach(([id, fn]) => document.getElementById(id).addEventListener('click', fn));
 }
 
 // Geocode location using Nominatim
@@ -211,26 +210,17 @@ function updateResource(id, resourceName, val) {
 
 function removeMarker(id) {
     markers = markers.filter(m => m.id !== id);
+    map.eachLayer(layer => layer instanceof L.Marker && layer.markerData?.id === id && map.removeLayer(layer));
     updateMarkerList();
-    
-    map.eachLayer(layer => {
-        if (layer instanceof L.Marker && layer.markerData && layer.markerData.id === id) {
-            map.removeLayer(layer);
-        }
-    });
 }
 
 // Haversine distance formula (returns km)
-function haversineDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Earth radius in km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-}
+const haversineDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371, toRad = deg => deg * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat/2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+};
 
 // Generate and run allocation
 async function generateAndRun() {
@@ -305,7 +295,8 @@ async function displayResults(result) {
                     allocated: parseInt(parts[3]),
                     route: parts[4],
                     cost: parseInt(parts[5]),
-                    status: parts[6].trim()
+                    status: parts[6].trim(),
+                    enhancedRoute: null // Will be filled with OSRM data
                 });
             }
         }
@@ -325,7 +316,52 @@ async function displayResults(result) {
         return marker ? marker.name : regionId;
     }
 
-    // Display in console format
+    // Draw routes on map and enhance route information with OSRM data
+    const drawnRoutes = new Set();
+    
+    for (const a of allocations) {
+        if (a.route && a.route !== 'NO_PATH' && a.allocated > 0) {
+            const routeParts = a.route.split(' -> ');
+            const routeKey = routeParts.join('->');
+            
+            if (drawnRoutes.has(routeKey)) continue;
+            drawnRoutes.add(routeKey);
+            
+            const coords = [];
+            
+            routeParts.forEach(name => {
+                const marker = markers.find(m => m.name.toLowerCase() === name.toLowerCase());
+                if (marker) {
+                    coords.push([marker.lat, marker.lon]);
+                }
+            });
+
+            if (coords.length >= 2) {
+                const color = a.status.includes('FULFILLED') ? '#27ae60' : '#f39c12';
+                const resourceName = resourceNames[a.resourceId] || a.resourceId;
+                
+                // Get enhanced route with intermediate cities
+                const enhancedRoute = await drawRoadRouteAndGetWaypoints(coords, color, resourceName, a.allocated, a.status, a.cost, routeParts);
+                a.enhancedRoute = enhancedRoute;
+                
+                // Add yellow waypoint markers for intermediate cities
+                for (let i = 1; i < coords.length - 1; i++) {
+                    const waypointIcon = L.divIcon({
+                        className: 'waypoint-marker',
+                        html: '<div style="background: #fbbf24; border: 3px solid white; width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.4);"></div>',
+                        iconSize: [14, 14],
+                        iconAnchor: [7, 7]
+                    });
+                    
+                    const waypointMarker = L.marker(coords[i], { icon: waypointIcon }).addTo(map);
+                    waypointMarker.bindPopup(`<b>📍 Via: ${routeParts[i]}</b>`);
+                    polylines.push(waypointMarker);
+                }
+            }
+        }
+    }
+
+    // Display in console format with enhanced routes
     let consoleHTML = '<div class="console-output">';
     consoleHTML += '<div class="console-line console-header">📊 ALLOCATION REPORT GENERATED</div>';
     consoleHTML += `<div class="console-line"><span class="console-label">Total Allocations:</span> <span class="console-value">${allocations.length}</span></div>`;
@@ -355,14 +391,12 @@ async function displayResults(result) {
             consoleHTML += `  <span class="console-label">Status:</span> <span class="${statusClass}">${a.status}</span><br>`;
             
             if (a.route && a.route !== 'NO_PATH') {
-                // Convert route IDs to names
-                const routeParts = a.route.split(' -> ');
-                const routeNames = routeParts.map(name => {
-                    // Route already contains names, just capitalize
-                    return name.charAt(0).toUpperCase() + name.slice(1);
-                }).join(' → ');
+                // Use enhanced route if available, otherwise use basic route
+                const displayRoute = a.enhancedRoute || a.route.split(' -> ').map(name => 
+                    name.charAt(0).toUpperCase() + name.slice(1)
+                ).join(' → ');
                 
-                consoleHTML += `  <span class="console-label">Route:</span> <span class="console-route">${routeNames}</span><br>`;
+                consoleHTML += `  <span class="console-label">Route:</span> <span class="console-route">${displayRoute}</span><br>`;
                 consoleHTML += `  <span class="console-label">Distance:</span> <span class="console-value">${a.cost} km</span>`;
             } else {
                 consoleHTML += `  <span class="console-label">Route:</span> <span class="console-failed">NO PATH AVAILABLE</span>`;
@@ -375,58 +409,14 @@ async function displayResults(result) {
     
     consoleHTML += '</div>';
     document.getElementById('report-output').innerHTML = consoleHTML;
-
-    // Draw routes on map with waypoint markers and ROAD-FOLLOWING paths
-    const drawnRoutes = new Set(); // Track unique routes to avoid duplicates
-    
-    for (const a of allocations) {
-        if (a.route && a.route !== 'NO_PATH' && a.allocated > 0) {
-            const routeParts = a.route.split(' -> ');
-            const routeKey = routeParts.join('->');
-            
-            if (drawnRoutes.has(routeKey)) continue;
-            drawnRoutes.add(routeKey);
-            
-            const coords = [];
-            
-            routeParts.forEach(name => {
-                const marker = markers.find(m => m.name.toLowerCase() === name.toLowerCase());
-                if (marker) {
-                    coords.push([marker.lat, marker.lon]);
-                }
-            });
-
-            if (coords.length >= 2) {
-                const color = a.status.includes('FULFILLED') ? '#27ae60' : '#f39c12';
-                const resourceName = resourceNames[a.resourceId] || a.resourceId;
-                
-                // Fetch actual road route from OSRM
-                await drawRoadRoute(coords, color, resourceName, a.allocated, a.status, a.cost, routeParts);
-                
-                // Add yellow waypoint markers for intermediate cities
-                for (let i = 1; i < coords.length - 1; i++) {
-                    const waypointIcon = L.divIcon({
-                        className: 'waypoint-marker',
-                        html: '<div style="background: #fbbf24; border: 3px solid white; width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.4);"></div>',
-                        iconSize: [14, 14],
-                        iconAnchor: [7, 7]
-                    });
-                    
-                    const waypointMarker = L.marker(coords[i], { icon: waypointIcon }).addTo(map);
-                    waypointMarker.bindPopup(`<b>📍 Via: ${routeParts[i]}</b>`);
-                    polylines.push(waypointMarker);
-                }
-            }
-        }
-    }
 }
 
-// Function to draw road-following route using OSRM
-async function drawRoadRoute(coords, color, resourceName, allocated, status, distance, routeParts) {
+// Function to draw road-following route using OSRM and return waypoint cities
+async function drawRoadRouteAndGetWaypoints(coords, color, resourceName, allocated, status, distance, routeParts) {
     try {
-        // Build OSRM API URL for route
+        // Build OSRM API URL for route with steps
         const coordsStr = coords.map(c => `${c[1]},${c[0]}`).join(';');
-        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
+        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson&steps=true`;
         
         const response = await fetch(osrmUrl);
         const data = await response.json();
@@ -435,6 +425,16 @@ async function drawRoadRoute(coords, color, resourceName, allocated, status, dis
             const route = data.routes[0];
             const routeCoords = route.geometry.coordinates.map(c => [c[1], c[0]]);
             
+            // Extract city names from steps if available
+            let waypointCities = [routeParts[0]]; // Start city
+            
+            // Check which of our marked locations fall along the route
+            for (let i = 1; i < routeParts.length - 1; i++) {
+                waypointCities.push(routeParts[i]);
+            }
+            
+            waypointCities.push(routeParts[routeParts.length - 1]); // End city
+            
             // Draw the road-following polyline
             const polyline = L.polyline(routeCoords, {
                 color: color,
@@ -442,17 +442,23 @@ async function drawRoadRoute(coords, color, resourceName, allocated, status, dis
                 opacity: 0.8
             }).addTo(map);
             
+            const enhancedRoute = waypointCities.map(c => 
+                c.charAt(0).toUpperCase() + c.slice(1)
+            ).join(' → ');
+            
             polyline.bindPopup(`
                 <b>${resourceName}</b><br>
                 Quantity: ${allocated.toLocaleString()} units<br>
                 Status: <b>${status}</b><br>
                 Distance: ${distance} km<br>
-                Route: ${routeParts.join(' → ')}
+                Route: ${enhancedRoute}
             `);
             
             polylines.push(polyline);
+            
+            return enhancedRoute;
         } else {
-            // Fallback to straight line if OSRM fails
+            // Fallback to straight line
             const polyline = L.polyline(coords, {
                 color: color,
                 weight: 4,
@@ -460,25 +466,33 @@ async function drawRoadRoute(coords, color, resourceName, allocated, status, dis
                 dashArray: '5, 10'
             }).addTo(map);
             
+            const fallbackRoute = routeParts.map(c => 
+                c.charAt(0).toUpperCase() + c.slice(1)
+            ).join(' → ');
+            
             polyline.bindPopup(`
                 <b>${resourceName}</b><br>
                 Quantity: ${allocated.toLocaleString()} units<br>
                 Status: <b>${status}</b><br>
-                Route: ${routeParts.join(' → ')}<br>
-                <small>(Straight line - road data unavailable)</small>
+                Route: ${fallbackRoute}<br>
+                <small>(Direct route - detailed road data unavailable)</small>
             `);
             
             polylines.push(polyline);
+            
+            return fallbackRoute;
         }
     } catch (error) {
         console.error('OSRM routing error:', error);
-        // Fallback to straight line
+        // Fallback
         const polyline = L.polyline(coords, {
             color: color,
             weight: 4,
             opacity: 0.6
         }).addTo(map);
         polylines.push(polyline);
+        
+        return routeParts.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join(' → ');
     }
 }
 
@@ -486,31 +500,35 @@ async function drawRoadRoute(coords, color, resourceName, allocated, status, dis
 function loadSampleData() {
     markers = [];
     markerIdCounter = 0;
-    
-    map.eachLayer(layer => {
-        if (layer instanceof L.Marker) map.removeLayer(layer);
-    });
+    map.eachLayer(layer => layer instanceof L.Marker && map.removeLayer(layer));
     polylines.forEach(p => map.removeLayer(p));
     polylines = [];
 
-    // Sample locations in Uttarakhand
-    createMarker(30.3165, 78.0322, 'Dehradun', 'disaster');
-    createMarker(29.9457, 78.1642, 'Haridwar', 'resource');
-    createMarker(30.3909, 78.4343, 'Tehri', 'resource');
-    createMarker(30.1534, 78.9712, 'Pauri', 'resource');
+    const sampleData = [
+        { lat: 30.3165, lon: 78.0322, name: 'Dehradun', type: 'disaster', pop: 5000, sev: 8 },
+        { lat: 29.9457, lon: 78.1642, name: 'Haridwar', type: 'resource', res: { Rice: 2000, Water: 500, Blankets: 0, Medicine: 0 } },
+        { lat: 30.3909, lon: 78.4343, name: 'Tehri', type: 'resource', res: { Rice: 0, Water: 1500, Blankets: 1000, Medicine: 0 } },
+        { lat: 30.1534, lon: 78.9712, name: 'Pauri', type: 'resource', res: { Rice: 1000, Water: 0, Blankets: 500, Medicine: 800 } }
+    ];
+
+    sampleData.forEach(d => {
+        createMarker(d.lat, d.lon, d.name, d.type);
+        const m = markers[markers.length - 1];
+        if (d.type === 'disaster') {
+            m.population = d.pop;
+            m.severity = d.sev;
+        } else {
+            m.resources = d.res;
+        }
+    });
     
-    showStatus('Sample data loaded - Dehradun as disaster, others as resource centers', 'success');
+    updateMarkerList();
+    showStatus('Sample data loaded - Multiple resource centers with different supplies', 'success');
 }
 
 function showStatus(message, type) {
     const status = document.getElementById('status');
     status.className = `status ${type}`;
     status.textContent = message;
-    
-    if (type !== 'info') {
-        setTimeout(() => {
-            status.textContent = '';
-            status.className = 'status';
-        }, 5000);
-    }
+    if (type !== 'info') setTimeout(() => status.className = 'status', 5000);
 }

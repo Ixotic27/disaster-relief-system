@@ -5,7 +5,12 @@
 #include <string.h>
 #include <limits.h>
 
-// Helper: Find region index by ID
+// Per-region resource stock tracking
+typedef struct {
+    int region_idx;
+    int stock[10];  // Max 10 resource types
+} RegionStock;
+
 static int find_region_index_internal(Region *regions, int n, const char *rid) {
     for (int i = 0; i < n; i++) {
         if (strcmp(regions[i].id, rid) == 0)
@@ -31,22 +36,78 @@ int region_severity(Region *regions, int n, const char *rid) {
     return (idx >= 0) ? regions[idx].severity : 0;
 }
 
-// Main Resource Allocator with Report Collection
+// Load per-region resource stocks from region_resources.txt
+RegionStock* load_region_stocks(const char *path, Region *regions, int nreg, int nres, int *stock_count) {
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        printf("Warning: Could not load region_resources.txt, using global pool\n");
+        return NULL;
+    }
+
+    RegionStock *stocks = calloc(nreg, sizeof(RegionStock));
+    for (int i = 0; i < nreg; i++) {
+        stocks[i].region_idx = i;
+        for (int r = 0; r < nres; r++) {
+            stocks[i].stock[r] = 0;
+        }
+    }
+
+    char buf[256];
+    while (fgets(buf, sizeof(buf), f)) {
+        if (buf[0] == '#' || buf[0] == '\n') continue;
+        
+        int region_idx;
+        char region_id[32], resource_id[32], resource_name[64];
+        int quantity;
+        
+        if (sscanf(buf, "%d,%[^,],%[^,],%[^,],%d", 
+                   &region_idx, region_id, resource_id, resource_name, &quantity) == 5) {
+            
+            // Find resource index
+            int res_idx = -1;
+            if (strcmp(resource_id, "R1") == 0) res_idx = 0;
+            else if (strcmp(resource_id, "R2") == 0) res_idx = 1;
+            else if (strcmp(resource_id, "R3") == 0) res_idx = 2;
+            else if (strcmp(resource_id, "R4") == 0) res_idx = 3;
+            
+            if (res_idx >= 0 && region_idx < nreg) {
+                stocks[region_idx].stock[res_idx] = quantity;
+            }
+        }
+    }
+    
+    fclose(f);
+    *stock_count = nreg;
+    
+    printf("✓ Loaded per-region resource stocks\n");
+    for (int i = 0; i < nreg; i++) {
+        if (regions[i].severity == 0 && 
+            (stocks[i].stock[0] > 0 || stocks[i].stock[1] > 0 || 
+             stocks[i].stock[2] > 0 || stocks[i].stock[3] > 0)) {
+            printf("  %s: R=%d, W=%d, B=%d, M=%d\n", 
+                   regions[i].name, 
+                   stocks[i].stock[0], stocks[i].stock[1], 
+                   stocks[i].stock[2], stocks[i].stock[3]);
+        }
+    }
+    
+    return stocks;
+}
+
 void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Resource *resources, int nres) {
     Request *r;
     AllocationReport *report = allocation_report_create(nreg);
 
     printf("\nStarting Resource Allocation Process...\n");
-
-    // Initialize report file at the beginning (write headers only)
     init_report("../data/report.txt");
 
-    // Count affected regions first
-    int affected_count = 0;
-    for (int i = 0; i < nreg; i++) {
-        if (regions[i].severity > 0) {
-            affected_count++;
-        }
+    // Load per-region stocks
+    int stock_count = 0;
+    RegionStock *region_stocks = load_region_stocks("../data/region_resources.txt", regions, nreg, nres, &stock_count);
+    
+    if (!region_stocks) {
+        printf("Error: Could not load region stocks\n");
+        return;
     }
 
     // Initialize region results for affected regions
@@ -59,9 +120,8 @@ void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Re
             region_result.region_name[NAMELEN - 1] = '\0';
             region_result.severity = regions[i].severity;
             region_result.population = regions[i].population;
-            region_result.resource_count = 0;
+            region_result.resource_count = nres;
 
-            // Initialize all resources as not allocated
             for (int r = 0; r < nres; r++) {
                 strncpy(region_result.resources[r].resource_id, resources[r].id, IDLEN - 1);
                 region_result.resources[r].resource_id[IDLEN - 1] = '\0';
@@ -71,7 +131,6 @@ void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Re
                 region_result.resources[r].needed = regions[i].population;
                 strcpy(region_result.resources[r].status, "NOT_ALLOCATED");
             }
-            region_result.resource_count = nres;
 
             allocation_report_add_region(report, &region_result);
         }
@@ -79,141 +138,99 @@ void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Re
 
     // Process requests
     while ((r = heap_pop(h)) != NULL) {
-        Resource *res = hm_get(hm, r->resource_id);
-
-        // Case 1: Resource not found
-        if (!res) {
+        int res_idx = find_resource_index(resources, nres, r->resource_id);
+        
+        if (res_idx < 0) {
             log_allocation(r->id, r->region_id, r->resource_id, 0, "", 0, "RESOURCE_NOT_FOUND");
             free(r);
             continue;
         }
 
-        // Case 2: Resource is out of stock
-        if (res->quantity <= 0) {
-            log_allocation(r->id, r->region_id, r->resource_id, 0, "", 0, "OUT_OF_STOCK");
-            free(r);
-            continue;
-        }
-
-        // Step 1: Find affected region details
-        int idx = find_region_index_internal(regions, nreg, r->region_id);
-        if (idx < 0) {
+        int disaster_idx = find_region_index_internal(regions, nreg, r->region_id);
+        if (disaster_idx < 0) {
             log_allocation(r->id, r->region_id, r->resource_id, 0, "", 0, "REGION_NOT_FOUND");
             free(r);
             continue;
         }
 
-        Region *affected = &regions[idx];
+        Region *affected = &regions[disaster_idx];
 
-        // Step 2: Proportional Allocation by Population
-        int allocated = 0;
-        if (affected->population > 0) {
-            if (res->quantity >= r->qty_needed) {
-                allocated = r->qty_needed;
-                res->quantity -= allocated;
-            } else {
-                allocated = res->quantity;
-                res->quantity = 0;
-            }
-        } else {
-            if (res->quantity >= r->qty_needed) {
-                allocated = r->qty_needed;
-                res->quantity -= allocated;
-            } else {
-                allocated = res->quantity;
-                res->quantity = 0;
-            }
-        }
-        // Step 3: Find shortest path from BEST safe region to disaster region
-        // Try ALL safe regions and pick the closest one
-        char **path = NULL;
-        int plen = 0;
-        int dist = INT_MAX;
-        int rc = -1;
-        int supplier_idx = -1;
+        // Find all safe regions sorted by distance
+        typedef struct {
+            int idx;
+            int distance;
+            char **path;
+            int plen;
+        } SupplierOption;
         
-        // Try ALL safe regions and find the one with shortest path
+        SupplierOption suppliers[100];
+        int supplier_count = 0;
+
         for (int i = 0; i < nreg; i++) {
-            if (regions[i].severity == 0) {  // Safe region (potential supplier)
+            if (regions[i].severity == 0 && region_stocks[i].stock[res_idx] > 0) {
                 char **temp_path = NULL;
                 int temp_plen = 0;
                 int temp_dist = 0;
-                int temp_rc = graph_shortest_path(g, regions[i].id, r->region_id, &temp_path, &temp_plen, &temp_dist);
                 
-                if (temp_rc == 0 && temp_dist < dist) {
-                    // Found a shorter path - free old path if exists
-                    if (path != NULL) {
-                        for (int j = 0; j < plen; j++) {
-                            free(path[j]);
-                        }
-                        free(path);
-                    }
-                    
-                    // Use this new shorter path
-                    path = temp_path;
-                    plen = temp_plen;
-                    dist = temp_dist;
-                    supplier_idx = i;
-                    rc = 0;
-                } else if (temp_path != NULL) {
-                    // Free unused path
-                    for (int j = 0; j < temp_plen; j++) {
-                        free(temp_path[j]);
-                    }
-                    free(temp_path);
+                if (graph_shortest_path(g, regions[i].id, r->region_id, &temp_path, &temp_plen, &temp_dist) == 0) {
+                    suppliers[supplier_count].idx = i;
+                    suppliers[supplier_count].distance = temp_dist;
+                    suppliers[supplier_count].path = temp_path;
+                    suppliers[supplier_count].plen = temp_plen;
+                    supplier_count++;
                 }
             }
         }
 
+        if (supplier_count == 0) {
+            log_allocation(r->id, r->region_id, r->resource_id, 0, "NO_PATH", 0, "NO_SUPPLIER");
+            free(r);
+            continue;
+        }
+
+        // Sort suppliers by distance (bubble sort for simplicity)
+        for (int i = 0; i < supplier_count - 1; i++) {
+            for (int j = 0; j < supplier_count - i - 1; j++) {
+                if (suppliers[j].distance > suppliers[j + 1].distance) {
+                    SupplierOption temp = suppliers[j];
+                    suppliers[j] = suppliers[j + 1];
+                    suppliers[j + 1] = temp;
+                }
+            }
+        }
+
+        // Allocate from nearest supplier
+        int supplier_idx = suppliers[0].idx;
+        int available = region_stocks[supplier_idx].stock[res_idx];
+        int allocated = (available >= r->qty_needed) ? r->qty_needed : available;
+        
+        region_stocks[supplier_idx].stock[res_idx] -= allocated;
+
+        // Build route string
         char route[512];
         route[0] = '\0';
-
-        if (rc == 0 && path != NULL) {
-            for (int i = 0; i < plen; i++) {
-                // Convert region ID to region name
-                int rid_idx = find_region_index_internal(regions, nreg, path[i]);
-                if (rid_idx >= 0) {
-                    strcat(route, regions[rid_idx].name);
-                } else {
-                    strcat(route, path[i]);
-                }
-                if (i < plen - 1) strcat(route, " -> ");
-                free(path[i]);
+        
+        for (int i = 0; i < suppliers[0].plen; i++) {
+            int rid_idx = find_region_index_internal(regions, nreg, suppliers[0].path[i]);
+            if (rid_idx >= 0) {
+                strcat(route, regions[rid_idx].name);
             }
-            free(path);
-        } else {
-            strcpy(route, "NO_PATH");
+            if (i < suppliers[0].plen - 1) strcat(route, " -> ");
         }
 
-        // Step 4: Determine Status
         const char *status;
-        if (allocated == 0)
-            status = "FAILED";
-        else if (allocated < r->qty_needed)
-            status = (strcmp(route, "NO_PATH") == 0) ? "PARTIAL_NO_PATH" : "PARTIAL";
-        else
-            status = "FULFILLED";
+        if (allocated == 0) status = "FAILED";
+        else if (allocated < r->qty_needed) status = "PARTIAL";
+        else status = "FULFILLED";
 
-        // Step 5: Log Allocation (CSV format) - APPENDS to file
-        log_allocation(
-            r->id,
-            r->region_id,
-            r->resource_id,
-            allocated,
-            route,
-            dist,
-            status
-        );
+        log_allocation(r->id, r->region_id, r->resource_id, allocated, route, suppliers[0].distance, status);
 
-        // Step 6: Update Report with Allocation Result
-        int res_idx = find_resource_index(resources, nres, r->resource_id);
-        
+        // Update report
         for (int i = 0; i < report->region_count; i++) {
             if (strcmp(report->regions[i].region_id, r->region_id) == 0) {
-                // Find the resource in this region and update it
                 for (int j = 0; j < report->regions[i].resource_count; j++) {
                     if (strcmp(report->regions[i].resources[j].resource_id, r->resource_id) == 0) {
-                        report->regions[i].resources[j].allocated = allocated;
+                        report->regions[i].resources[j].allocated += allocated;
                         strcpy(report->regions[i].resources[j].status, status);
                         break;
                     }
@@ -222,8 +239,8 @@ void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Re
             }
         }
 
-        // Step 7: Add Route to Report (if allocation was successful and path exists)
-        if (allocated > 0 && strcmp(route, "NO_PATH") != 0 && supplier_idx >= 0) {
+        // Add route to report
+        if (allocated > 0) {
             ResourceRoute route_info;
             strncpy(route_info.source_region_id, regions[supplier_idx].id, IDLEN - 1);
             route_info.source_region_id[IDLEN - 1] = '\0';
@@ -235,23 +252,30 @@ void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Re
             route_info.dest_region_name[NAMELEN - 1] = '\0';
             strncpy(route_info.resource_id, r->resource_id, IDLEN - 1);
             route_info.resource_id[IDLEN - 1] = '\0';
-            strncpy(route_info.resource_name, res->name, NAMELEN - 1);
+            strncpy(route_info.resource_name, resources[res_idx].name, NAMELEN - 1);
             route_info.resource_name[NAMELEN - 1] = '\0';
             route_info.quantity = allocated;
-            route_info.distance = dist;
+            route_info.distance = suppliers[0].distance;
             strncpy(route_info.route, route, 511);
             route_info.route[511] = '\0';
 
             allocation_report_add_route(report, &route_info);
         }
 
+        // Free paths
+        for (int i = 0; i < supplier_count; i++) {
+            for (int j = 0; j < suppliers[i].plen; j++) {
+                free(suppliers[i].path[j]);
+            }
+            free(suppliers[i].path);
+        }
+
         free(r);
     }
 
     printf("\nAll allocations completed.\n");
-
-    // Print summary tables to terminal
     print_allocation_summary_report(report, resources, nres);
-
+    
+    free(region_stocks);
     allocation_report_free(report);
 }

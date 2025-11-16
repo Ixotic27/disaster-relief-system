@@ -4,7 +4,7 @@ import subprocess
 import os
 import json
 
-app = Flask(__name__, static_folder='.', static_url_path='')
+app = Flask(__name__, static_folder='frontend', static_url_path='')
 CORS(app)
 
 # Paths
@@ -17,12 +17,15 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 @app.route('/')
 def serve_frontend():
-    return send_from_directory('.', 'index.html')
+    return send_from_directory('frontend', 'index.html')
 
 
-@app.route('/<path:filename>')
-def serve_static(filename):
-    return send_from_directory('.', filename)
+@app.route('/<path:path>')
+def serve_static(path):
+    try:
+        return send_from_directory('frontend', path)
+    except:
+        return send_from_directory('frontend', 'index.html')
 
 
 @app.route('/generate', methods=['POST'])
@@ -73,16 +76,25 @@ def generate():
         print(f"✓ Generated {resources_path}")
         print(f"  Total resources: Rice={total_rice}, Water={total_water}, Blankets={total_blankets}, Medicine={total_medicine}")
         
-        # Also save per-region resource mapping for reference
-        region_res_path = os.path.join(DATA_DIR, 'region_resources_map.txt')
+        # Generate region_resources.txt - Track resources PER region
+        region_res_path = os.path.join(DATA_DIR, 'region_resources.txt')
         with open(region_res_path, 'w') as f:
-            f.write('#RegionID,RegionName,Rice,Water,Blankets,Medicine\n')
-            for res_center in resources_list:
-                f.write(f"{res_center['id']},{res_center['name']},"
-                       f"{res_center.get('resources', {}).get('Rice', 0)},"
-                       f"{res_center.get('resources', {}).get('Water', 0)},"
-                       f"{res_center.get('resources', {}).get('Blankets', 0)},"
-                       f"{res_center.get('resources', {}).get('Medicine', 0)}\n")
+            f.write('#region_index,region_id,resource_id,resource_name,quantity\n')
+            region_idx = 0
+            for marker in markers:
+                if marker['type'] == 'resource':
+                    # Write each resource this center has
+                    if marker.get('resources', {}).get('Rice', 0) > 0:
+                        f.write(f"{region_idx},{marker['id']},R1,Rice,{marker['resources']['Rice']}\n")
+                    if marker.get('resources', {}).get('Water', 0) > 0:
+                        f.write(f"{region_idx},{marker['id']},R2,Water Bottles,{marker['resources']['Water']}\n")
+                    if marker.get('resources', {}).get('Blankets', 0) > 0:
+                        f.write(f"{region_idx},{marker['id']},R3,Blankets,{marker['resources']['Blankets']}\n")
+                    if marker.get('resources', {}).get('Medicine', 0) > 0:
+                        f.write(f"{region_idx},{marker['id']},R4,Medicines,{marker['resources']['Medicine']}\n")
+                region_idx += 1
+
+        print(f"✓ Generated {region_res_path} with per-region resource tracking")
 
         print(f"✓ Generated {resources_path}")
 
@@ -95,13 +107,13 @@ def generate():
                 for route in routes:
                     f.write(f"{route['from']},{route['to']},{route['distance']}\n")
             else:
-                # Auto-generate intelligent network topology
-                # Connect each location to its 2-3 nearest neighbors (not full mesh)
-                # This creates multi-hop paths
+                # Auto-generate: Connect each location to nearest neighbors
+                # PLUS ensure all resource centers connect to all disasters
                 all_locations = disasters + resources_list
+                edges_written = set()
                 
+                # Step 1: Connect each location to 3-4 nearest neighbors
                 for loc in all_locations:
-                    # Calculate distances to all other locations
                     distances = []
                     for other in all_locations:
                         if loc['id'] != other['id']:
@@ -110,16 +122,31 @@ def generate():
                                 other['lat'], other['lon']
                             )
                             distances.append({
+                                'from': loc['name'],
                                 'to': other['name'],
                                 'distance': int(dist)
                             })
                     
-                    # Sort by distance and connect to 2-3 nearest neighbors
                     distances.sort(key=lambda x: x['distance'])
-                    max_connections = min(3, len(distances))  # Connect to 2-3 nearest
+                    max_connections = min(4, len(distances))
                     
                     for i in range(max_connections):
-                        f.write(f"{loc['name']},{distances[i]['to']},{distances[i]['distance']}\n")
+                        edge_key = tuple(sorted([distances[i]['from'], distances[i]['to']]))
+                        if edge_key not in edges_written:
+                            f.write(f"{distances[i]['from']},{distances[i]['to']},{distances[i]['distance']}\n")
+                            edges_written.add(edge_key)
+                
+                # Step 2: ENSURE all resources can reach all disasters (direct connections)
+                for res in resources_list:
+                    for dis in disasters:
+                        edge_key = tuple(sorted([res['name'], dis['name']]))
+                        if edge_key not in edges_written:
+                            dist = int(haversine_distance(
+                                res['lat'], res['lon'],
+                                dis['lat'], dis['lon']
+                            ))
+                            f.write(f"{res['name']},{dis['name']},{dist}\n")
+                            edges_written.add(edge_key)
 
         print(f"✓ Generated {edges_path}")
 

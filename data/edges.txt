@@ -2,12 +2,10 @@
 Dehradun,Tehri,39
 Dehradun,Haridwar,43
 Dehradun,Pauri,92
-Haridwar,Dehradun,43
+Dehradun,Delhi,203
+Delhi,Haridwar,172
+Delhi,Tehri,228
+Delhi,Pauri,239
 Haridwar,Tehri,55
 Haridwar,Pauri,81
-Tehri,Dehradun,39
-Tehri,Haridwar,55
 Tehri,Pauri,57
-Pauri,Tehri,57
-Pauri,Haridwar,81
-Pauri,Dehradun,92

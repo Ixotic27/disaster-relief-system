@@ -1,5 +1,5 @@
 #ID,Name,Category,Quantity
-R1,Rice,Food,3000
-R2,Water Bottles,Beverage,6000
-R3,Blankets,Shelter,1500
-R4,Medicines,Medical,900
+R1,Rice,Food,198900
+R2,Water Bottles,Beverage,108196
+R3,Blankets,Shelter,51000
+R4,Medicines,Medical,18001

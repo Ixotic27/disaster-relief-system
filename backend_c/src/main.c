@@ -18,7 +18,7 @@ int main(int argc, char **argv)
     Region *regions = NULL;
     int nres = 0, nreg = 0;
 
-    printf("\n===Disaster Resource Allocation System===\n\n");
+    printf("\n=== Disaster Resource Allocation System (Non-Interactive Mode) ===\n\n");
 
     // === Load Resources ===
     snprintf(filePath, sizeof(filePath), "%s/resources.txt", dataPath);
@@ -97,16 +97,10 @@ int main(int argc, char **argv)
     printf("\nFound %d disaster region(s) and %d safe region(s)\n", 
            disasterCount, nreg - disasterCount);
 
-    // === Distribute resources to safe regions ===
-    // Resources are already loaded with total quantities
-    // We don't need per-region stock tracking for this allocation algorithm
-    // The allocation.c will handle distribution from global resource pool
-
-    printf("\n✓ Resource distribution: Using global resource pool\n");
-    printf("  Total Rice: %d\n", resources[0].quantity);
-    printf("  Total Water: %d\n", resources[1].quantity);
-    printf("  Total Blankets: %d\n", resources[2].quantity);
-    printf("  Total Medicine: %d\n", resources[3].quantity);
+    // === Load per-region resource stocks ===
+    // Resources will be loaded from region_resources.txt by allocation.c
+    printf("\n✓ Per-region resource tracking enabled\n");
+    printf("  (Resources will be loaded from region_resources.txt)\n");
 
     // === Prepare Heap of Disaster Requests ===
     // Create a request for EACH resource in each affected region
@@ -137,17 +131,17 @@ int main(int argc, char **argv)
     }
     printf("✓ Generated %d requests\n", req_counter);
 
-    //Run Allocation Process
+    // === Run Allocation Process ===
     printf("\n=== Starting Allocation Process ===\n");
     run_allocator(h, g, hm, regions, nreg, resources, nres);
 
-    //Cleanup Requests in Heap
+    // === Cleanup Requests in Heap ===
     Request *req;
     while ((req = heap_pop(h)) != NULL)
         free(req);
     heap_free(h);
 
-    //Cleanup Other Resources
+    // === Cleanup Other Resources ===
     hm_free(hm);
     graph_free(g);
     free(is_disaster);
