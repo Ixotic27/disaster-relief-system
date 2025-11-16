@@ -18,23 +18,25 @@ int main(int argc, char **argv)
     Region *regions = NULL;
     int nres = 0, nreg = 0;
 
+    printf("\n===Disaster Resource Allocation System===\n\n");
+
     // === Load Resources ===
     snprintf(filePath, sizeof(filePath), "%s/resources.txt", dataPath);
     if (load_resources(filePath, &resources, &nres) != 0)
     {
-        fprintf(stderr, "Error: Failed to load resources\n");
+        fprintf(stderr, "Error: Failed to load resources from %s\n", filePath);
         return 1;
     }
-    printf("Loaded %d resources\n", nres);
+    printf("✓ Loaded %d resources\n", nres);
 
     // === Load Regions ===
     snprintf(filePath, sizeof(filePath), "%s/regions.txt", dataPath);
     if (load_regions(filePath, &regions, &nreg) != 0)
     {
-        fprintf(stderr, "Error: Failed to load regions\n");
+        fprintf(stderr, "Error: Failed to load regions from %s\n", filePath);
         return 1;
     }
-    printf("Loaded %d regions\n", nreg);
+    printf("✓ Loaded %d regions\n", nreg);
 
     // === Setup HashMap for Resources ===
     HashMap *hm = hm_create(2 * nres + 1);
@@ -48,160 +50,70 @@ int main(int argc, char **argv)
 
     snprintf(filePath, sizeof(filePath), "%s/edges.txt", dataPath);
     if (load_edges(filePath, g) != 0)
-        fprintf(stderr, "Warning: Failed to load edges\n");
-
-    // === Print all regions ===
-    printf("\n=== Disaster Resource Allocation System ===\n\n");
-    printf("List of Regions:\n");
-    for (int i = 0; i < nreg; i++)
-        printf(" [%d] %s (id: %s)\n", i + 1, regions[i].name, regions[i].id);
-
-    // Default severity = 0 for all regions
-    for (int i = 0; i < nreg; i++)
-        regions[i].severity = 0;
-
-    // Ask number of affected regions FIRST
-    int disasterCount = 0;
-    printf("\nEnter number of disaster-affected regions: ");
-    if (scanf("%d", &disasterCount) != 1 || disasterCount < 0 || disasterCount > nreg)
     {
-        printf("Invalid number. Exiting.\n");
-        return 1;
-    }
-    while (getchar() != '\n'); // flush buffer
-
-    int *is_disaster = calloc(nreg, sizeof(int));
-    if (!is_disaster)
-    {
-        return 1;
-    }
-
-    // === Select affected regions and ONLY ask severity for affected ones ===
-    for (int i = 0; i < disasterCount; i++)
-    {
-        int count = -1;
-        printf("\nSelect disaster region #%d (enter region number): ", i + 1);
-        if (scanf("%d", &count) != 1 || count < 1 || count > nreg)
-        {
-            printf("Invalid selection. Try again.\n");
-            while (getchar() != '\n');
-            i--;
-            continue;
-        }
-        while (getchar() != '\n'); // flush buffer
-
-        int idx = count - 1;
-        if (is_disaster[idx])
-        {
-            printf("Already selected. Pick another.\n");
-            i--;
-            continue;
-        }
-
-        is_disaster[idx] = 1;
-
-        // ONLY ask severity for affected regions
-        int sev = 0;
-        printf("Enter severity for %s (1-10): ", regions[idx].name);
-        if (scanf("%d", &sev) != 1 || sev < 1 || sev > 10)
-        {
-            printf("Invalid input. Using default severity = 1.\n");
-            sev = 1;
-            while (getchar() != '\n');
-        }
-        while (getchar() != '\n'); // flush buffer
-        regions[idx].severity = sev;
-    }
-
-    // === Print safe regions ===
-    printf("\nSafe regions:\n");
-    for (int i = 0; i < nreg; i++)
-        if (!is_disaster[i])
-            printf("  - %s (id: %s)\n", regions[i].name, regions[i].id);
-
-    // === Resource allocation for safe regions ===
-    printf("\nDo you want to manually enter resources for SAFE regions? (y/n): ");
-    char yn;
-    scanf("%c", &yn);
-    while (getchar() != '\n'); // flush buffer
-
-    int **stock = malloc(sizeof(int *) * nres);
-    for (int r = 0; r < nres; r++)
-        stock[r] = calloc(nreg, sizeof(int));
-
-    if (yn == 'y' || yn == 'Y')
-    {
-        for (int i = 0; i < nreg; i++)
-        {
-            if (is_disaster[i]) continue;
-            printf("\n-- Safe region: %s --\n", regions[i].name);
-            for (int r = 0; r < nres; r++)
-            {
-                printf("  Available %s (%s): ", resources[r].name, resources[r].id);
-                int q = 0;
-                if (scanf("%d", &q) != 1 || q < 0)
-                {
-                    printf("Invalid, assuming 0.\n");
-                    q = 0;
-                    while (getchar() != '\n');
-                }
-                stock[r][i] = q;
-            }
-        }
+        fprintf(stderr, "Warning: Failed to load edges from %s\n", filePath);
     }
     else
     {
-        int safeCount = 0;
-        for (int i = 0; i < nreg; i++)
-            if (!is_disaster[i]) safeCount++;
-        if (safeCount == 0) safeCount = 1;
+        printf("✓ Loaded edges\n");
+    }
 
-        for (int r = 0; r < nres; r++)
+    // === Identify disaster and safe regions from severity field ===
+    int disasterCount = 0;
+    int *is_disaster = calloc(nreg, sizeof(int));
+    if (!is_disaster)
+    {
+        fprintf(stderr, "Error: Memory allocation failed\n");
+        return 1;
+    }
+
+    printf("\nRegion Status:\n");
+    for (int i = 0; i < nreg; i++)
+    {
+        if (regions[i].severity > 0)
         {
-            int per = resources[r].quantity / safeCount;
-            int rem = resources[r].quantity % safeCount;
-            for (int i = 0; i < nreg; i++)
-            {
-                if (is_disaster[i]) { stock[r][i] = 0; continue; }
-                stock[r][i] = per + (rem > 0 ? 1 : 0);
-                if (rem > 0) rem--;
-            }
+            is_disaster[i] = 1;
+            disasterCount++;
+            printf("  [DISASTER] %s (severity: %d, population: %d)\n", 
+                   regions[i].name, regions[i].severity, regions[i].population);
         }
-        printf("\nDistributed global resources to safe regions.\n");
+        else
+        {
+            is_disaster[i] = 0;
+            printf("  [SAFE] %s (population: %d)\n", 
+                   regions[i].name, regions[i].population);
+        }
     }
 
-    // === Save disaster_config.txt ===
-    snprintf(filePath, sizeof(filePath), "%s/disaster_config.txt", dataPath);
-    FILE *df = fopen(filePath, "w");
-    if (df)
+    if (disasterCount == 0)
     {
-        fprintf(df, "#region_index,region_id,region_name,severity,population\n");
-        for (int i = 0; i < nreg; i++)
-            if (is_disaster[i])
-                fprintf(df, "%d,%s,%s,%d,%d\n", i, regions[i].id, regions[i].name, regions[i].severity, regions[i].population);
-        fclose(df);
-        printf("Saved disaster_config.txt\n");
+        fprintf(stderr, "Error: No disaster regions found (severity > 0)\n");
+        free(is_disaster);
+        free(resources);
+        free(regions);
+        return 1;
     }
 
-    // === Save region_resources.txt ===
-    snprintf(filePath, sizeof(filePath), "%s/region_resources.txt", dataPath);
-    FILE *rf = fopen(filePath, "w");
-    if (rf)
-    {
-        fprintf(rf, "#region_index,region_id,resource_id,resource_name,quantity\n");
-        for (int i = 0; i < nreg; i++)
-            for (int r = 0; r < nres; r++)
-                if (stock[r][i] > 0)
-                    fprintf(rf, "%d,%s,%s,%s,%d\n", i, regions[i].id, resources[r].id, resources[r].name, stock[r][i]);
-        fclose(rf);
-        printf("Saved region_resources.txt\n");
-    }
+    printf("\nFound %d disaster region(s) and %d safe region(s)\n", 
+           disasterCount, nreg - disasterCount);
+
+    // === Distribute resources to safe regions ===
+    // Resources are already loaded with total quantities
+    // We don't need per-region stock tracking for this allocation algorithm
+    // The allocation.c will handle distribution from global resource pool
+
+    printf("\n✓ Resource distribution: Using global resource pool\n");
+    printf("  Total Rice: %d\n", resources[0].quantity);
+    printf("  Total Water: %d\n", resources[1].quantity);
+    printf("  Total Blankets: %d\n", resources[2].quantity);
+    printf("  Total Medicine: %d\n", resources[3].quantity);
 
     // === Prepare Heap of Disaster Requests ===
     // Create a request for EACH resource in each affected region
     Heap *h = heap_create(disasterCount * nres + 5);
     int req_counter = 0;
     
+    printf("\nGenerating requests for disaster regions...\n");
     for (int i = 0; i < nreg; i++)
     {
         if (!is_disaster[i]) continue;
@@ -213,39 +125,36 @@ int main(int argc, char **argv)
             snprintf(req->id, IDLEN, "RQ_%d", req_counter++);
             strncpy(req->region_id, regions[i].id, IDLEN - 1);
             req->region_id[IDLEN - 1] = '\0';
-            strncpy(req->resource_id, resources[r].id, IDLEN - 1);  // ASSIGN RESOURCE ID
+            strncpy(req->resource_id, resources[r].id, IDLEN - 1);
             req->resource_id[IDLEN - 1] = '\0';
             
-            printf("DEBUG: Request %s - Region: %s, Resource: %s\n", req->id, req->region_id, req->resource_id);
-            
+            // Request quantity based on population (can be adjusted)
             req->qty_needed = regions[i].population;
 
             int priority = regions[i].severity * 1000 + regions[i].population;
             heap_insert(h, req, priority);
         }
     }
+    printf("✓ Generated %d requests\n", req_counter);
 
-    // === Generate Report ===
-    snprintf(filePath, sizeof(filePath), "%s/report.txt", dataPath);
-
-    // === Allocation Process ===
+    //Run Allocation Process
+    printf("\n=== Starting Allocation Process ===\n");
     run_allocator(h, g, hm, regions, nreg, resources, nres);
 
-    // === Cleanup Requests in Heap ===
-    Request *r;
-    while ((r = heap_pop(h)) != NULL)
-        free(r);
+    //Cleanup Requests in Heap
+    Request *req;
+    while ((req = heap_pop(h)) != NULL)
+        free(req);
     heap_free(h);
 
-    // === Cleanup Other Resources ===
+    //Cleanup Other Resources
     hm_free(hm);
     graph_free(g);
-    for (int r = 0; r < nres; r++) free(stock[r]);
-    free(stock);
     free(is_disaster);
     free(resources);
     free(regions);
 
-    printf("\nSetup complete. Allocation finished (see report.txt).\n");
+    printf("\n=== Allocation Complete ===\n");
+    printf("✓ Results written to ../data/report.txt\n\n");
     return 0;
 }

@@ -1,0 +1,4 @@
+#RegionID,RegionName,Rice,Water,Blankets,Medicine
+RG2,Haridwar,1000,2000,500,300
+RG3,Tehri,1000,2000,500,300
+RG4,Pauri,1000,2000,500,300

@@ -1,13 +1,3 @@
 #region_index,region_id,region_name,severity,population
-0,RG1,Dehradun,1,1696694
-1,RG2,Haridwar,2,1890422
-2,RG3,Tehri Garhwal,3,618931
-3,RG4,Pauri Garhwal,4,687271
-4,RG5,Chamoli,5,391605
-5,RG6,Nainital,6,954605
-6,RG7,Almora,7,622506
-7,RG8,Bageshwar,8,259898
-8,RG9,Champawat,9,259648
-9,RG10,Pithoragarh,10,483439
-10,RG11,Rudraprayag,1,242285
-11,RG12,Udham Singh Nagar,8,1648902
+0,RG1,Dehradun,8,1696694
+4,RG5,Chamoli,9,391605

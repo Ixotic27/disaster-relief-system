@@ -1,14 +1,5 @@
 #ID,Name,Severity(optional),Population
-RG1,Dehradun,0,1696694
-RG2,Haridwar,0,1890422
-RG3,Tehri Garhwal,0,618931
-RG4,Pauri Garhwal,0,687271
-RG5,Chamoli,0,391605
-RG6,Nainital,0,954605
-RG7,Almora,0,622506
-RG8,Bageshwar,0,259898
-RG9,Champawat,0,259648
-RG10,Pithoragarh,0,483439
-RG11,Rudraprayag,0,242285
-RG12,Udham Singh Nagar,0,1648902
-RG13,Uttarkashi,0,330086
+RG1,Dehradun,5,100000
+RG2,Haridwar,0,0
+RG3,Tehri,0,0
+RG4,Pauri,0,0

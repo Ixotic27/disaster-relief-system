@@ -1,19 +1,13 @@
 #From,To,Distance(km)
-Dehradun,Haridwar,52
-Dehradun,Tehri Garhwal,80
-Tehri Garhwal,Pauri Garhwal,60
-Pauri Garhwal,Nainital,120
-Haridwar,Nainital,130
-Chamoli,Tehri Garhwal,75
-Almora,Nainital,65
-Bageshwar,Almora,37
-Champawat,Almora,80
-Pithoragarh,Champawat,75
-Rudraprayag,Chamoli,55
-Udham Singh Nagar,Nainital,72
-Uttarkashi,Tehri Garhwal,115
-Dehradun,Uttarkashi,144
-Pauri Garhwal,Rudraprayag,82
-Tehri Garhwal,Rudraprayag,65
-Chamoli,Bageshwar,95
-Nainital,Udham Singh Nagar,72
+Dehradun,Tehri,39
+Dehradun,Haridwar,43
+Dehradun,Pauri,92
+Haridwar,Dehradun,43
+Haridwar,Tehri,55
+Haridwar,Pauri,81
+Tehri,Dehradun,39
+Tehri,Haridwar,55
+Tehri,Pauri,57
+Pauri,Tehri,57
+Pauri,Haridwar,81
+Pauri,Dehradun,92

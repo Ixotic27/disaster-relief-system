@@ -1,5 +1,45 @@
 #region_index,region_id,resource_id,resource_name,quantity
-12,RG13,R1,Rice,12345678
-12,RG13,R2,Water Bottles,12345678
-12,RG13,R3,Blankets,12345678
-12,RG13,R4,Medicines,12345678
+1,RG2,R1,Rice,727273
+1,RG2,R2,Water Bottles,818182
+1,RG2,R3,Blankets,45455
+1,RG2,R4,Medicines,272728
+2,RG3,R1,Rice,727273
+2,RG3,R2,Water Bottles,818182
+2,RG3,R3,Blankets,45455
+2,RG3,R4,Medicines,272728
+3,RG4,R1,Rice,727273
+3,RG4,R2,Water Bottles,818182
+3,RG4,R3,Blankets,45455
+3,RG4,R4,Medicines,272728
+5,RG6,R1,Rice,727273
+5,RG6,R2,Water Bottles,818182
+5,RG6,R3,Blankets,45455
+5,RG6,R4,Medicines,272727
+6,RG7,R1,Rice,727273
+6,RG7,R2,Water Bottles,818182
+6,RG7,R3,Blankets,45455
+6,RG7,R4,Medicines,272727
+7,RG8,R1,Rice,727273
+7,RG8,R2,Water Bottles,818182
+7,RG8,R3,Blankets,45455
+7,RG8,R4,Medicines,272727
+8,RG9,R1,Rice,727273
+8,RG9,R2,Water Bottles,818182
+8,RG9,R3,Blankets,45454
+8,RG9,R4,Medicines,272727
+9,RG10,R1,Rice,727273
+9,RG10,R2,Water Bottles,818182
+9,RG10,R3,Blankets,45454
+9,RG10,R4,Medicines,272727
+10,RG11,R1,Rice,727272
+10,RG11,R2,Water Bottles,818182
+10,RG11,R3,Blankets,45454
+10,RG11,R4,Medicines,272727
+11,RG12,R1,Rice,727272
+11,RG12,R2,Water Bottles,818181
+11,RG12,R3,Blankets,45454
+11,RG12,R4,Medicines,272727
+12,RG13,R1,Rice,727272
+12,RG13,R2,Water Bottles,818181
+12,RG13,R3,Blankets,45454
+12,RG13,R4,Medicines,272727

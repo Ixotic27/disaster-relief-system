@@ -3,10 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
-// ============================================================
 // Helper: Find region index by ID
-// ============================================================
 static int find_region_index_internal(Region *regions, int n, const char *rid) {
     for (int i = 0; i < n; i++) {
         if (strcmp(regions[i].id, rid) == 0)
@@ -32,10 +31,7 @@ int region_severity(Region *regions, int n, const char *rid) {
     return (idx >= 0) ? regions[idx].severity : 0;
 }
 
-// ============================================================
 // Main Resource Allocator with Report Collection
-// ============================================================
-
 void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Resource *resources, int nres) {
     Request *r;
     AllocationReport *report = allocation_report_create(nreg);
@@ -99,9 +95,7 @@ void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Re
             continue;
         }
 
-        // ======================================================
         // Step 1: Find affected region details
-        // ======================================================
         int idx = find_region_index_internal(regions, nreg, r->region_id);
         if (idx < 0) {
             log_allocation(r->id, r->region_id, r->resource_id, 0, "", 0, "REGION_NOT_FOUND");
@@ -111,9 +105,7 @@ void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Re
 
         Region *affected = &regions[idx];
 
-        // ======================================================
         // Step 2: Proportional Allocation by Population
-        // ======================================================
         int allocated = 0;
         if (affected->population > 0) {
             if (res->quantity >= r->qty_needed) {
@@ -132,23 +124,43 @@ void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Re
                 res->quantity = 0;
             }
         }
-
-        // ======================================================
-        // Step 3: Find shortest path from a safe region to disaster region
-        // ======================================================
+        // Step 3: Find shortest path from BEST safe region to disaster region
+        // Try ALL safe regions and pick the closest one
         char **path = NULL;
         int plen = 0;
-        int dist = 0;
+        int dist = INT_MAX;
         int rc = -1;
         int supplier_idx = -1;
         
-        // Try to find path from any safe region to the disaster region
+        // Try ALL safe regions and find the one with shortest path
         for (int i = 0; i < nreg; i++) {
             if (regions[i].severity == 0) {  // Safe region (potential supplier)
-                rc = graph_shortest_path(g, regions[i].id, r->region_id, &path, &plen, &dist);
-                if (rc == 0) {
+                char **temp_path = NULL;
+                int temp_plen = 0;
+                int temp_dist = 0;
+                int temp_rc = graph_shortest_path(g, regions[i].id, r->region_id, &temp_path, &temp_plen, &temp_dist);
+                
+                if (temp_rc == 0 && temp_dist < dist) {
+                    // Found a shorter path - free old path if exists
+                    if (path != NULL) {
+                        for (int j = 0; j < plen; j++) {
+                            free(path[j]);
+                        }
+                        free(path);
+                    }
+                    
+                    // Use this new shorter path
+                    path = temp_path;
+                    plen = temp_plen;
+                    dist = temp_dist;
                     supplier_idx = i;
-                    break;  // Found a path from this supplier
+                    rc = 0;
+                } else if (temp_path != NULL) {
+                    // Free unused path
+                    for (int j = 0; j < temp_plen; j++) {
+                        free(temp_path[j]);
+                    }
+                    free(temp_path);
                 }
             }
         }
@@ -173,9 +185,7 @@ void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Re
             strcpy(route, "NO_PATH");
         }
 
-        // ======================================================
         // Step 4: Determine Status
-        // ======================================================
         const char *status;
         if (allocated == 0)
             status = "FAILED";
@@ -184,9 +194,7 @@ void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Re
         else
             status = "FULFILLED";
 
-        // ======================================================
         // Step 5: Log Allocation (CSV format) - APPENDS to file
-        // ======================================================
         log_allocation(
             r->id,
             r->region_id,
@@ -197,9 +205,7 @@ void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Re
             status
         );
 
-        // ======================================================
         // Step 6: Update Report with Allocation Result
-        // ======================================================
         int res_idx = find_resource_index(resources, nres, r->resource_id);
         
         for (int i = 0; i < report->region_count; i++) {
@@ -216,9 +222,7 @@ void run_allocator(Heap *h, Graph *g, HashMap *hm, Region *regions, int nreg, Re
             }
         }
 
-        // ======================================================
         // Step 7: Add Route to Report (if allocation was successful and path exists)
-        // ======================================================
         if (allocated > 0 && strcmp(route, "NO_PATH") != 0 && supplier_idx >= 0) {
             ResourceRoute route_info;
             strncpy(route_info.source_region_id, regions[supplier_idx].id, IDLEN - 1);

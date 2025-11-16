@@ -4,8 +4,8 @@
 #include "types.h"
 
 typedef struct Edge {
-    int to;
-    int cost;
+    int to; //Index of destination node
+    int cost; //distance between the regions
     struct Edge *next;
 } Edge;
 
@@ -17,7 +17,7 @@ typedef struct {
 
 // Graph functions
 Graph *graph_create(int n);
-void graph_free(Graph *g);
+void graph_free(Graph *g); //for freeing the memory allocated to graph data strcuture
 void graph_add_edge(Graph *g, const char *from, const char *to, int cost);
 int graph_shortest_path(Graph *g, const char *src, const char *dst, char ***path_out, int *path_len, int *dist_out);
 
