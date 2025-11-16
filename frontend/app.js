@@ -243,15 +243,14 @@ async function generateAndRun() {
     }
 
     showStatus('Generating files and running allocation...', 'info');
-    
-    // Don't generate routes - let the backend create intelligent topology
+
     const payload = {
         markers: markers,
-        routes: []  // Empty - backend will auto-generate smart network
+        routes: []
     };
 
     try {
-        const response = await fetch('http://localhost:5000/generate', {
+        const response = await fetch('/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -273,6 +272,7 @@ async function generateAndRun() {
         console.error('Error:', error);
     }
 }
+
 
 // Display results on map and in sidebar
 async function displayResults(result) {
