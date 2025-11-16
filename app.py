@@ -4,7 +4,7 @@ import subprocess
 import os
 import json
 
-app = Flask(__name__, static_folder='frontend', static_url_path='')
+app = Flask(__name__, static_folder='frontend', static_url_path='/')
 CORS(app)
 
 # Paths
@@ -21,7 +21,7 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 @app.route('/')
 def serve_frontend():
-    return send_from_directory('frontend', 'index.html')
+    return app.send_static_file('index.html')
 
 @app.route('/<path:path>')
 def serve_static(path):
