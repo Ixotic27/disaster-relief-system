@@ -262,4 +262,7 @@ if __name__ == '__main__':
     print(f"C executable: {os.path.abspath(C_EXECUTABLE)}")
     print(f"Frontend will be served at: http://localhost:5000")
     print("=" * 60)
-    app.run(debug=False, port=5000, use_reloader=False)  # Disabled reloader to prevent crash
+    
+    # Get port from environment variable for deployment
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
