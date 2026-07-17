@@ -1,7 +1,7 @@
 #include "../include/heap.h"
 #include <stdlib.h>
 
-// ===== Swap helpers =====
+// Swap helpers
 static void swap(Request **a, Request **b)
 {
     Request *t = *a;
@@ -16,18 +16,18 @@ static void swapi(int *a, int *b)
     *b = t;
 }
 
-// ===== Create a heap =====
+//Create a heap
 Heap *heap_create(int cap)
 {
     Heap *h = malloc(sizeof(Heap));
     h->arr = malloc(sizeof(Request *) * cap); // array of pointers to requests
-    h->prio = malloc(sizeof(int) * cap);      // array of priorities
+    h->prio = malloc(sizeof(int) * cap);// array of priorities
     h->size = 0;
     h->cap = cap;
     return h;
 }
 
-// ===== Maintain heap property upwards =====
+//Maintain heap property upwards
 static void sift_up(Heap *h, int i)
 {
     while (i > 0)
@@ -40,7 +40,7 @@ static void sift_up(Heap *h, int i)
     }
 }
 
-// ===== Maintain heap property downwards =====
+//Maintain heap property downwards
 static void sift_down(Heap *h, int i)
 {
     for (;;)
@@ -55,7 +55,7 @@ static void sift_down(Heap *h, int i)
     }
 }
 
-// ===== Insert a request with priority =====
+// Insert a request with priority
 void heap_insert(Heap *h, Request *r, int priority)
 {
     // Resize if full
@@ -72,7 +72,7 @@ void heap_insert(Heap *h, Request *r, int priority)
     h->size++;
 }
 
-// ===== Pop the highest priority request =====
+// Pop the highest priority request
 Request *heap_pop(Heap *h)
 {
     if (h->size == 0) return NULL;
@@ -87,7 +87,7 @@ Request *heap_pop(Heap *h)
     return res;
 }
 
-// ===== Free heap memory =====
+//Free heap memory
 void heap_free(Heap *h)
 {
     free(h->arr);

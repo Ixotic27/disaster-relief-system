@@ -20,7 +20,7 @@ int main(int argc, char **argv)
 
     printf("\n=== Disaster Resource Allocation System (Non-Interactive Mode) ===\n\n");
 
-    // === Load Resources ===
+    //Load Resource
     snprintf(filePath, sizeof(filePath), "%s/resources.txt", dataPath);
     if (load_resources(filePath, &resources, &nres) != 0)
     {
@@ -29,7 +29,7 @@ int main(int argc, char **argv)
     }
     printf("✓ Loaded %d resources\n", nres);
 
-    // === Load Regions ===
+    //Load Regions
     snprintf(filePath, sizeof(filePath), "%s/regions.txt", dataPath);
     if (load_regions(filePath, &regions, &nreg) != 0)
     {
@@ -38,12 +38,12 @@ int main(int argc, char **argv)
     }
     printf("✓ Loaded %d regions\n", nreg);
 
-    // === Setup HashMap for Resources ===
+    //Setup HashMap for Resources
     HashMap *hm = hm_create(2 * nres + 1);
     for (int i = 0; i < nres; i++)
         hm_put(hm, resources[i].id, &resources[i]);
 
-    // === Setup Graph for Regions ===
+    //Setup Graph for Regions
     Graph *g = graph_create(nreg);
     g->regions = regions;
     g->n = nreg;
@@ -58,7 +58,7 @@ int main(int argc, char **argv)
         printf("✓ Loaded edges\n");
     }
 
-    // === Identify disaster and safe regions from severity field ===
+    // Identify disaster and safe regions from severity field
     int disasterCount = 0;
     int *is_disaster = calloc(nreg, sizeof(int));
     if (!is_disaster)
@@ -97,12 +97,12 @@ int main(int argc, char **argv)
     printf("\nFound %d disaster region(s) and %d safe region(s)\n", 
            disasterCount, nreg - disasterCount);
 
-    // === Load per-region resource stocks ===
+    //Load per-region resource stocks
     // Resources will be loaded from region_resources.txt by allocation.c
     printf("\n✓ Per-region resource tracking enabled\n");
     printf("  (Resources will be loaded from region_resources.txt)\n");
 
-    // === Prepare Heap of Disaster Requests ===
+    //Prepare Heap of Disaster Requests
     // Create a request for EACH resource in each affected region
     Heap *h = heap_create(disasterCount * nres + 5);
     int req_counter = 0;
@@ -131,17 +131,17 @@ int main(int argc, char **argv)
     }
     printf("✓ Generated %d requests\n", req_counter);
 
-    // === Run Allocation Process ===
+    //Run Allocation Process
     printf("\n=== Starting Allocation Process ===\n");
     run_allocator(h, g, hm, regions, nreg, resources, nres);
 
-    // === Cleanup Requests in Heap ===
+    // Cleanup Requests in Heap
     Request *req;
     while ((req = heap_pop(h)) != NULL)
         free(req);
     heap_free(h);
 
-    // === Cleanup Other Resources ===
+    // Cleanup Other Resources
     hm_free(hm);
     graph_free(g);
     free(is_disaster);
